@@ -120,7 +120,6 @@ func (*Entrypoint) Flags(cfg *Config) *flag.FlagSet {
 
 func (e *Entrypoint) ParseConfig(flags *flag.FlagSet) {
 	_ = flags.String("config", "conduit.yaml", "global config file")
-	version := flags.Bool("version", false, "prints current Conduit version")
 
 	// flags is set up to exit on error, we can safely ignore the error
 	err := ff.Parse(flags, os.Args[1:],
@@ -131,12 +130,6 @@ func (e *Entrypoint) ParseConfig(flags *flag.FlagSet) {
 	)
 	if err != nil {
 		e.exitWithError(err)
-	}
-
-	// check if the -version flag is set
-	if *version {
-		_, _ = fmt.Fprintf(os.Stdout, "%s\n", Version(true))
-		os.Exit(0)
 	}
 }
 
