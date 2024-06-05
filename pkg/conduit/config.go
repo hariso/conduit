@@ -78,10 +78,10 @@ type Config struct {
 
 	PluginDispenserFactories map[string]builtin.DispenserFactory
 
-	dev struct {
-		cpuprofile   string
-		memprofile   string
-		blockprofile string
+	Dev struct {
+		CPUProfile   string
+		MemProfile   string
+		BlockProfile string
 	}
 }
 

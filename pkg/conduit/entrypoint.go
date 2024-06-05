@@ -27,6 +27,7 @@ import (
 	"github.com/peterbourgon/ff/v3/ffyaml"
 )
 
+// TODO: Deprecate
 // Serve is a shortcut for Entrypoint.Serve.
 func Serve(cfg Config) {
 	e := &Entrypoint{}
@@ -95,17 +96,17 @@ func (*Entrypoint) Flags(cfg *Config) *flag.FlagSet {
 	flags.StringVar(&cfg.Pipelines.Path, "pipelines.path", cfg.Pipelines.Path, "path to the directory that has the yaml pipeline configuration files, or a single pipeline configuration file")
 	flags.BoolVar(&cfg.Pipelines.ExitOnError, "pipelines.exit-on-error", cfg.Pipelines.ExitOnError, "exit Conduit if a pipeline experiences an error while running")
 
-	// NB: flags with prefix dev.* are hidden from help output by default, they only show up using '-dev -help'
-	showDevHelp := flags.Bool("dev", false, "used together with the dev flag it shows dev flags")
-	flags.StringVar(&cfg.dev.cpuprofile, "dev.cpuprofile", "", "write cpu profile to file")
-	flags.StringVar(&cfg.dev.memprofile, "dev.memprofile", "", "write memory profile to file")
-	flags.StringVar(&cfg.dev.blockprofile, "dev.blockprofile", "", "write block profile to file")
+	// NB: flags with prefix Dev.* are hidden from help output by default, they only show up using '-Dev -help'
+	showDevHelp := flags.Bool("Dev", false, "used together with the Dev flag it shows Dev flags")
+	flags.StringVar(&cfg.Dev.CPUProfile, "Dev.CPUProfile", "", "write cpu profile to file")
+	flags.StringVar(&cfg.Dev.MemProfile, "Dev.MemProfile", "", "write memory profile to file")
+	flags.StringVar(&cfg.Dev.BlockProfile, "Dev.BlockProfile", "", "write block profile to file")
 
-	// show user or dev flags
+	// show user or Dev flags
 	flags.Usage = func() {
 		tmpFlags := flag.NewFlagSet("conduit", flag.ExitOnError)
 		flags.VisitAll(func(f *flag.Flag) {
-			if f.Name == "dev" || strings.HasPrefix(f.Name, "dev.") != *showDevHelp {
+			if f.Name == "Dev" || strings.HasPrefix(f.Name, "Dev.") != *showDevHelp {
 				return // hide flag from output
 			}
 			// reset value to its default, to ensure default is shown correctly
