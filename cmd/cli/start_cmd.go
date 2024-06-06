@@ -1,21 +1,12 @@
 package cli
 
 import (
-	"flag"
 	"strings"
-	"time"
 
 	"github.com/conduitio/conduit/pkg/conduit"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
-
-type StartFlags struct {
-	StringValue  string        `long:"string-flag" usage:"A flag representing a string"`
-	IntValue     int           `long:"int-flag" usage:"A flag representing an integer"`
-	Duration     time.Duration `long:"duration-flag" usage:"A flag representing a duration"`
-	StringsSlice []string      `long:"string-slice-flag" usage:"A flag representing a slice of strings"`
-	BoolValue    bool          `long:"bool-flag" persistent:"false" usage:"A flag representing a boolean value"`
-}
 
 func cmdStart() *cobra.Command {
 	return &cobra.Command{
@@ -30,48 +21,45 @@ func cmdStart() *cobra.Command {
 	}
 }
 
-func Flags(cfg *conduit.Config) *flag.FlagSet {
+// TODO: Consolidate with global flags that are in entrypoint.go
+func SetStartFlags(cfg *conduit.Config, cmd *cobra.Command) {
 
-	// TODO extract flags from config struct rather than defining flags manually
-	flags := flag.NewFlagSet("conduit", flag.ExitOnError)
+	cmd.PersistentFlags().StringVar(&cfg.DB.Type, "db.type", cfg.DB.Type, "database type; accepts badger,postgres,inmemory")
+	cmd.PersistentFlags().StringVar(&cfg.DB.Badger.Path, "db.badger.path", cfg.DB.Badger.Path, "path to badger DB")
+	cmd.PersistentFlags().StringVar(&cfg.DB.Postgres.ConnectionString, "db.postgres.connection-string", cfg.DB.Postgres.ConnectionString, "postgres connection string")
+	cmd.PersistentFlags().StringVar(&cfg.DB.Postgres.Table, "db.postgres.table", cfg.DB.Postgres.Table, "postgres table in which to store data (will be created if it does not exist)")
 
-	flags.StringVar(&cfg.DB.Type, "db.type", cfg.DB.Type, "database type; accepts badger,postgres,inmemory")
-	flags.StringVar(&cfg.DB.Badger.Path, "db.badger.path", cfg.DB.Badger.Path, "path to badger DB")
-	flags.StringVar(&cfg.DB.Postgres.ConnectionString, "db.postgres.connection-string", cfg.DB.Postgres.ConnectionString, "postgres connection string")
-	flags.StringVar(&cfg.DB.Postgres.Table, "db.postgres.table", cfg.DB.Postgres.Table, "postgres table in which to store data (will be created if it does not exist)")
+	cmd.PersistentFlags().BoolVar(&cfg.API.Enabled, "api.enabled", cfg.API.Enabled, "enable HTTP and gRPC API")
+	cmd.PersistentFlags().StringVar(&cfg.API.HTTP.Address, "http.address", cfg.API.HTTP.Address, "address for serving the HTTP API")
+	cmd.PersistentFlags().StringVar(&cfg.API.GRPC.Address, "grpc.address", cfg.API.GRPC.Address, "address for serving the gRPC API")
 
-	flags.BoolVar(&cfg.API.Enabled, "api.enabled", cfg.API.Enabled, "enable HTTP and gRPC API")
-	flags.StringVar(&cfg.API.HTTP.Address, "http.address", cfg.API.HTTP.Address, "address for serving the HTTP API")
-	flags.StringVar(&cfg.API.GRPC.Address, "grpc.address", cfg.API.GRPC.Address, "address for serving the gRPC API")
+	cmd.PersistentFlags().StringVar(&cfg.Log.Level, "log.level", cfg.Log.Level, "sets logging level; accepts debug, info, warn, error, trace")
+	cmd.PersistentFlags().StringVar(&cfg.Log.Format, "log.format", cfg.Log.Format, "sets the format of the logging; accepts json, cli")
 
-	flags.StringVar(&cfg.Log.Level, "log.level", cfg.Log.Level, "sets logging level; accepts debug, info, warn, error, trace")
-	flags.StringVar(&cfg.Log.Format, "log.format", cfg.Log.Format, "sets the format of the logging; accepts json, cli")
+	cmd.PersistentFlags().StringVar(&cfg.Connectors.Path, "connectors.path", cfg.Connectors.Path, "path to standalone connectors' directory")
+	cmd.PersistentFlags().StringVar(&cfg.Processors.Path, "processors.path", cfg.Processors.Path, "path to standalone processors' directory")
 
-	flags.StringVar(&cfg.Connectors.Path, "connectors.path", cfg.Connectors.Path, "path to standalone connectors' directory")
-	flags.StringVar(&cfg.Processors.Path, "processors.path", cfg.Processors.Path, "path to standalone processors' directory")
-
-	flags.StringVar(&cfg.Pipelines.Path, "pipelines.path", cfg.Pipelines.Path, "path to the directory that has the yaml pipeline configuration files, or a single pipeline configuration file")
-	flags.BoolVar(&cfg.Pipelines.ExitOnError, "pipelines.exit-on-error", cfg.Pipelines.ExitOnError, "exit Conduit if a pipeline experiences an error while running")
+	cmd.PersistentFlags().StringVar(&cfg.Pipelines.Path, "pipelines.path", cfg.Pipelines.Path, "path to the directory that has the yaml pipeline configuration files, or a single pipeline configuration file")
+	cmd.PersistentFlags().BoolVar(&cfg.Pipelines.ExitOnError, "pipelines.exit-on-error", cfg.Pipelines.ExitOnError, "exit Conduit if a pipeline experiences an error while running")
 
 	// NB: flags with prefix dev.* are hidden from help output by default, they only show up using '-dev -help'
-	showDevHelp := flags.Bool("dev", false, "used together with the dev flag it shows dev flags")
-	flags.StringVar(&cfg.Dev.CPUProfile, "dev.cpuprofile", "", "write cpu profile to file")
-	flags.StringVar(&cfg.Dev.MemProfile, "dev.memprofile", "", "write memory profile to file")
-	flags.StringVar(&cfg.Dev.BlockProfile, "dev.blockprofile", "", "write block profile to file")
+	showDevHelp := cmd.PersistentFlags().Bool("dev", false, "used together with the dev flag it shows dev flags")
+	cmd.PersistentFlags().StringVar(&cfg.Dev.CPUProfile, "dev.cpuprofile", "", "write cpu profile to file")
+	cmd.PersistentFlags().StringVar(&cfg.Dev.MemProfile, "dev.memprofile", "", "write memory profile to file")
+	cmd.PersistentFlags().StringVar(&cfg.Dev.BlockProfile, "dev.blockprofile", "", "write block profile to file")
 
 	// show user or dev flags
-	flags.Usage = func() {
-		tmpFlags := flag.NewFlagSet("conduit", flag.ExitOnError)
-		flags.VisitAll(func(f *flag.Flag) {
+	// show user or dev flags
+	cmd.PersistentFlags().Usage = func() {
+		tmpFlags := pflag.NewFlagSet("conduit", pflag.ExitOnError)
+		cmd.PersistentFlags().VisitAll(func(f *pflag.Flag) {
 			if f.Name == "dev" || strings.HasPrefix(f.Name, "dev.") != *showDevHelp {
 				return // hide flag from output
 			}
 			// reset value to its default, to ensure default is shown correctly
 			_ = f.Value.Set(f.DefValue)
-			tmpFlags.Var(f.Value, f.Name, f.Usage)
+			tmpFlags.VarP(f.Value, f.Name, "", f.Usage)
 		})
 		tmpFlags.Usage()
 	}
-
-	return flags
 }

@@ -25,9 +25,8 @@ func Cmd() *cobra.Command {
 
 	// start command
 	start := cmdStart()
-	startFlags := StartFlags{}
-	flags := BuildFlags(&startFlags)
-	setFlagsToCommand(start, flags)
+	cfg := conduit.DefaultConfig()
+	SetStartFlags(&cfg, start)
 	rootCmd.AddCommand(start)
 
 	// version command
