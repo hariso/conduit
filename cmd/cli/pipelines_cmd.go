@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	"github.com/conduitio/conduit/pkg/conduit"
@@ -12,6 +13,17 @@ import (
 
 func isNotDSStore(path string, d fs.DirEntry) bool {
 	return filepath.Base(path) != ".DS_Store"
+}
+
+func openFile(filename string) {
+	editor := os.Getenv("EDITOR")
+	if editor == "" {
+		editor = "nano"
+	}
+	editorCmd := exec.Command(editor, filename)
+	if err := editorCmd.Run(); err != nil {
+		fmt.Println(err)
+	}
 }
 
 func listDirectory(dir string) error {
@@ -54,7 +66,7 @@ func cmdPipelines() *cobra.Command {
 		Use:   "edit",
 		Short: "Edit a pipeline",
 		Run: func(cmd *cobra.Command, args []string) {
-
+			openFile("./pipelines/generator-to-log.yaml")
 		},
 	}
 
