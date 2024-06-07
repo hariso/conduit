@@ -65,6 +65,82 @@ func NewService(
 	}
 }
 
+func (s *Service) InitWithoutProvision(ctx context.Context) error {
+	s.logger.Debug(ctx).
+		Str("pipelines_path", s.pipelinesPath).
+		Msg("initializing the provisioning service")
+
+	files, err := s.getYamlFiles(s.pipelinesPath)
+	if err != nil {
+		return cerrors.Errorf("failed to read pipelines folder %q: %w", s.pipelinesPath, err)
+	}
+
+	// contains all the errors occurred while provisioning configuration files.
+	var multierr error
+
+	// parse pipeline config files
+	configs := make([]config.Pipeline, 0, len(files))
+	for _, file := range files {
+		cfg, err := s.parsePipelineConfigFile(ctx, file)
+		if err != nil {
+			return multierror.Append(multierr, err)
+		}
+		configs = append(configs, cfg...)
+	}
+
+	// contains pipelineIDs of all the pipelines in all the configuration files, either successfully provisioned or not.
+	var allPls []string
+
+	// delete duplicate pipelines (if any)
+	for duplicateID, duplicateIndexes := range s.findDuplicateIDs(configs) {
+		multierr = cerrors.Errorf("%d pipelines with ID %q will be skipped: %w", len(duplicateIndexes), duplicateID, ErrDuplicatedPipelineID)
+		configs = s.deleteIndexes(configs, duplicateIndexes)
+
+		// duplicated IDs should still count towards all encountered pipeline IDs
+		allPls = append(allPls, duplicateID)
+	}
+
+	// remove pipelines with duplicate IDs from API pipelines
+	var apiProvisioned []int
+	for i, pl := range configs {
+		pipelineInstance, err := s.pipelineService.Get(ctx, pl.ID)
+		if err != nil {
+			if !cerrors.Is(err, pipeline.ErrInstanceNotFound) {
+				multierr = multierror.Append(multierr, cerrors.Errorf("error getting pipeline instance with ID %q: %w", pl.ID, err))
+			}
+			continue
+		}
+		if pipelineInstance.ProvisionedBy != pipeline.ProvisionTypeConfig {
+			multierr = multierror.Append(multierr, cerrors.Errorf("pipelines with ID %q will be skipped: %w", pl.ID, ErrNotProvisionedByConfig))
+			apiProvisioned = append(apiProvisioned, i)
+		}
+	}
+	configs = s.deleteIndexes(configs, apiProvisioned)
+
+	// contains pipelineIDs of successfully provisioned pipelines.
+	var successPls []string
+	for _, cfg := range configs {
+		allPls = append(allPls, cfg.ID)
+
+		err = s.provisionPipeline(ctx, cfg)
+		if err != nil {
+			multierr = multierror.Append(multierr, cerrors.Errorf("pipeline %q, error while provisioning: %w", cfg.ID, err))
+			continue
+		}
+		successPls = append(successPls, cfg.ID)
+	}
+
+	// pipelines that were provisioned by config but are not in the config files anymore
+	deletedPls := s.deleteOldPipelines(ctx, allPls)
+	s.logger.Info(ctx).
+		Strs("created", successPls).
+		Strs("deleted", deletedPls).
+		Str("pipelines_path", s.pipelinesPath).
+		Msg("pipeline configs provisioned")
+
+	return multierr
+}
+
 // Init provision pipelines defined in pipelinePath directory. should initialize pipeline service
 // before calling this function, and all pipelines should be stopped.
 func (s *Service) Init(ctx context.Context) error {

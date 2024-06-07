@@ -9,9 +9,11 @@ import (
 )
 
 func cmdStart() *cobra.Command {
-	return &cobra.Command{
+	cfg := conduit.DefaultConfig()
+
+	start := &cobra.Command{
 		Use:   "start",
-		Short: "Start conduit service",
+		Short: "Start Conduit",
 		Long:  `Starts the conduit service. This command will start the conduit service`,
 		Run: func(cmd *cobra.Command, args []string) {
 			e := &conduit.Entrypoint{}
@@ -19,10 +21,12 @@ func cmdStart() *cobra.Command {
 			e.Serve(cfg)
 		},
 	}
+	setStartFlags(&cfg, start)
+	return start
 }
 
 // TODO: Consolidate with global flags that are in entrypoint.go
-func SetStartFlags(cfg *conduit.Config, cmd *cobra.Command) {
+func setStartFlags(cfg *conduit.Config, cmd *cobra.Command) {
 
 	cmd.PersistentFlags().StringVar(&cfg.DB.Type, "db.type", cfg.DB.Type, "database type; accepts badger,postgres,inmemory")
 	cmd.PersistentFlags().StringVar(&cfg.DB.Badger.Path, "db.badger.path", cfg.DB.Badger.Path, "path to badger DB")

@@ -82,7 +82,7 @@ type Runtime struct {
 	// Ready will be closed when Runtime has successfully started
 	Ready chan struct{}
 
-	pipelineService  *pipeline.Service
+	PipelineService  *pipeline.Service
 	connectorService *connector.Service
 	processorService *processor.Service
 
@@ -90,7 +90,7 @@ type Runtime struct {
 	processorPluginService *proc_plugin.PluginService
 
 	connectorPersister *connector.Persister
-	logger             log.CtxLogger
+	Logger             log.CtxLogger
 }
 
 // NewRuntime sets up a Runtime instance and primes it for start.
@@ -99,7 +99,7 @@ func NewRuntime(cfg Config) (*Runtime, error) {
 		return nil, cerrors.Errorf("invalid config: %w", err)
 	}
 
-	logger := newLogger(cfg.Log.Level, cfg.Log.Format)
+	logger := NewLogger(cfg.Log.Level, cfg.Log.Format)
 
 	var db database.DB
 	db = cfg.DB.Driver
@@ -148,7 +148,7 @@ func NewRuntime(cfg Config) (*Runtime, error) {
 		ProvisionService: provisionService,
 		Ready:            make(chan struct{}),
 
-		pipelineService:  plService,
+		PipelineService:  plService,
 		connectorService: connService,
 		processorService: procService,
 
@@ -157,13 +157,13 @@ func NewRuntime(cfg Config) (*Runtime, error) {
 
 		connectorPersister: connectorPersister,
 
-		logger: logger,
+		Logger: logger,
 	}
 	return r, nil
 }
 
-func newLogger(level string, format string) log.CtxLogger {
-	// TODO make logger hooks configurable
+func NewLogger(level string, format string) log.CtxLogger {
+	// TODO make Logger hooks configurable
 	l, _ := zerolog.ParseLevel(level)
 	f, _ := log.ParseFormat(format)
 	logger := log.InitLogger(l, f)
@@ -231,7 +231,7 @@ func (r *Runtime) Run(ctx context.Context) (err error) {
 		}
 		// Block until tomb is dying, then wait for goroutines to stop running.
 		<-t.Dying()
-		r.logger.Warn(ctx).Msg("conduit is stopping, stand by for shutdown ...")
+		r.Logger.Warn(ctx).Msg("conduit is stopping, stand by for shutdown ...")
 		err = t.Wait()
 	}()
 
@@ -249,15 +249,15 @@ func (r *Runtime) Run(ctx context.Context) (err error) {
 	}
 
 	if r.Config.Pipelines.ExitOnError {
-		r.pipelineService.OnFailure(func(e pipeline.FailureEvent) {
-			r.logger.Warn(ctx).
+		r.PipelineService.OnFailure(func(e pipeline.FailureEvent) {
+			r.Logger.Warn(ctx).
 				Err(e.Error).
 				Str(log.PipelineIDField, e.ID).
 				Msg("Conduit will shut down due to a pipeline failure and 'exit on error' enabled")
 			t.Kill(cerrors.Errorf("shut down due to 'exit on error' enabled: %w", e.Error))
 		})
 	}
-	err = r.pipelineService.Init(ctx)
+	err = r.PipelineService.Init(ctx)
 	if err != nil {
 		return cerrors.Errorf("failed to init pipeline service: %w", err)
 	}
@@ -265,10 +265,10 @@ func (r *Runtime) Run(ctx context.Context) (err error) {
 	err = r.ProvisionService.Init(ctx)
 	if err != nil {
 		multierror.ForEach(err, func(err error) {
-			r.logger.Err(ctx, err).Msg("provisioning failed")
+			r.Logger.Err(ctx, err).Msg("provisioning failed")
 		})
 		if r.Config.Pipelines.ExitOnError {
-			r.logger.Warn(ctx).
+			r.Logger.Warn(ctx).
 				Err(err).
 				Msg("Conduit will shut down due to a pipeline provisioning failure and 'exit on error' enabled")
 			err = cerrors.Errorf("shut down due to 'exit on error' enabled: %w", err)
@@ -276,10 +276,10 @@ func (r *Runtime) Run(ctx context.Context) (err error) {
 		}
 	}
 
-	err = r.pipelineService.Run(ctx, r.connectorService, r.processorService, r.connectorPluginService)
+	err = r.PipelineService.Run(ctx, r.connectorService, r.processorService, r.connectorPluginService)
 	if err != nil {
 		multierror.ForEach(err, func(err error) {
-			r.logger.Err(ctx, err).Msg("pipeline failed to be started")
+			r.Logger.Err(ctx, err).Msg("pipeline failed to be started")
 		})
 	}
 
@@ -298,10 +298,10 @@ func (r *Runtime) Run(ctx context.Context) (err error) {
 		if tcpAddr, ok := httpAddr.(*net.TCPAddr); ok {
 			port = tcpAddr.Port
 		}
-		r.logger.Info(ctx).Send()
-		r.logger.Info(ctx).Msgf("click here to navigate to Conduit UI: http://localhost:%d/ui", port)
-		r.logger.Info(ctx).Msgf("click here to navigate to explore the HTTP API: http://localhost:%d/openapi", port)
-		r.logger.Info(ctx).Send()
+		r.Logger.Info(ctx).Send()
+		r.Logger.Info(ctx).Msgf("click here to navigate to Conduit UI: http://localhost:%d/ui", port)
+		r.Logger.Info(ctx).Msgf("click here to navigate to explore the HTTP API: http://localhost:%d/openapi", port)
+		r.Logger.Info(ctx).Send()
 	}
 
 	close(r.Ready)
@@ -350,13 +350,13 @@ func (r *Runtime) initProfiling(ctx context.Context) (deferred func(), err error
 		deferFunc(func() {
 			f, err := os.Create(r.Config.Dev.MemProfile)
 			if err != nil {
-				r.logger.Err(ctx, err).Msg("could not create memory profile")
+				r.Logger.Err(ctx, err).Msg("could not create memory profile")
 				return
 			}
 			defer f.Close()
 			runtime.GC() // get up-to-date statistics
 			if err := pprof.WriteHeapProfile(f); err != nil {
-				r.logger.Err(ctx, err).Msg("could not write memory profile")
+				r.Logger.Err(ctx, err).Msg("could not write memory profile")
 			}
 		})
 	}
@@ -365,12 +365,12 @@ func (r *Runtime) initProfiling(ctx context.Context) (deferred func(), err error
 		deferFunc(func() {
 			f, err := os.Create(r.Config.Dev.BlockProfile)
 			if err != nil {
-				r.logger.Err(ctx, err).Msg("could not create block profile")
+				r.Logger.Err(ctx, err).Msg("could not create block profile")
 				return
 			}
 			defer f.Close()
 			if err := pprof.Lookup("block").WriteTo(f, 0); err != nil {
-				r.logger.Err(ctx, err).Msg("could not write block profile")
+				r.Logger.Err(ctx, err).Msg("could not write block profile")
 			}
 		})
 	}
@@ -386,12 +386,12 @@ func (r *Runtime) registerCleanup(t *tomb.Tomb) {
 		// t.Err() can be nil, when we had a call: t.Kill(nil)
 		// t.Err() will be context.Canceled, if the tomb's context was canceled
 		if t.Err() == nil || cerrors.Is(t.Err(), context.Canceled) {
-			r.pipelineService.StopAll(ctx, pipeline.ErrGracefulShutdown)
+			r.PipelineService.StopAll(ctx, pipeline.ErrGracefulShutdown)
 		} else {
 			// tomb died due to a real error
-			r.pipelineService.StopAll(ctx, cerrors.Errorf("conduit experienced an error: %w", t.Err()))
+			r.PipelineService.StopAll(ctx, cerrors.Errorf("conduit experienced an error: %w", t.Err()))
 		}
-		err := r.pipelineService.Wait(exitTimeout)
+		err := r.PipelineService.Wait(exitTimeout)
 		t.Go(func() error {
 			r.connectorPersister.Wait()
 			return r.DB.Close()
@@ -422,8 +422,8 @@ func (r *Runtime) newHTTPMetricsHandler() http.Handler {
 func (r *Runtime) serveGRPCAPI(ctx context.Context, t *tomb.Tomb) (net.Addr, error) {
 	grpcServer := grpc.NewServer(
 		grpc.ChainUnaryInterceptor(
-			grpcutil.RequestIDUnaryServerInterceptor(r.logger),
-			grpcutil.LoggerUnaryServerInterceptor(r.logger),
+			grpcutil.RequestIDUnaryServerInterceptor(r.Logger),
+			grpcutil.LoggerUnaryServerInterceptor(r.Logger),
 		),
 		grpc.StatsHandler(r.newGrpcStatsHandler()),
 	)
@@ -450,13 +450,13 @@ func (r *Runtime) serveGRPCAPI(ctx context.Context, t *tomb.Tomb) (net.Addr, err
 	// Names taken from api.proto
 	healthServer := api.NewHealthServer(
 		map[string]api.Checker{
-			"PipelineService":        r.pipelineService,
+			"PipelineService":        r.PipelineService,
 			"ConnectorService":       r.connectorService,
 			"ProcessorService":       r.processorService,
 			"ConnectorPluginService": r.connectorPluginService,
 			"ProcessorPluginService": r.processorPluginService,
 		},
-		r.logger,
+		r.Logger,
 	)
 	grpc_health_v1.RegisterHealthServer(grpcServer, healthServer)
 
@@ -477,7 +477,7 @@ func (r *Runtime) serveHTTPAPI(
 	gwmux := grpcruntime.NewServeMux(
 		grpcruntime.WithIncomingHeaderMatcher(grpcutil.HeaderMatcher),
 		grpcruntime.WithOutgoingHeaderMatcher(grpcutil.HeaderMatcher),
-		grpcutil.WithErrorHandler(r.logger),
+		grpcutil.WithErrorHandler(r.Logger),
 		grpcutil.WithPrettyJSONMarshaler(),
 		grpcruntime.WithHealthzEndpoint(grpc_health_v1.NewHealthClient(conn)),
 	)
@@ -574,7 +574,7 @@ func (r *Runtime) serveHTTPAPI(
 	handler := grpcutil.WithWebsockets(
 		ctx,
 		grpcutil.WithDefaultGatewayMiddleware(allowCORS(gwmux, "http://localhost:4200")),
-		r.logger,
+		r.Logger,
 	)
 
 	return r.serveHTTP(
@@ -639,7 +639,7 @@ func (r *Runtime) serveGRPC(
 		}
 	})
 
-	r.logger.Info(ctx).Str(log.ServerAddressField, ln.Addr().String()).Msg("grpc server started")
+	r.Logger.Info(ctx).Str(log.ServerAddressField, ln.Addr().String()).Msg("grpc server started")
 	return ln.Addr(), nil
 }
 
@@ -672,6 +672,6 @@ func (r *Runtime) serveHTTP(
 		return srv.Shutdown(ctx)
 	})
 
-	r.logger.Info(ctx).Str(log.ServerAddressField, ln.Addr().String()).Msg("http server started")
+	r.Logger.Info(ctx).Str(log.ServerAddressField, ln.Addr().String()).Msg("http server started")
 	return ln.Addr(), nil
 }
