@@ -1,0 +1,29 @@
+version: 2.0
+pipelines:
+  - id: generator-to-log
+    status: running
+    description: >
+      Example pipeline reading from file "example.in" and writing into file
+      "example.out". Note that the output file will contain the whole OpenCDC
+      record, the field "payload.after" will contain the base64 encoded line
+      written in "example.in".
+    connectors:
+      - id: example
+        type: source
+        plugin: generator
+        settings:
+          # global settings
+          rate: 1
+          recordCount: 100
+          burst.generateTime: 1s
+          burst.sleepTime: 1s
+          # default collection
+          format.type: structured
+          format.options.id: int
+          format.options.name: string
+          operations: create
+      - id: log
+        type: destination
+        plugin: log
+        settings:
+          level: info

@@ -35,7 +35,7 @@ func cmdInit() *cobra.Command {
 		Use:   "init",
 		Short: "Initialize a conduit pipeline",
 		Run: func(cmd *cobra.Command, args []string) {
-			copyFile("./examples/pipelines/file-to-file.yaml", "./pipelines/file-to-file.yaml")
+			copyFile("./examples/pipelines/generator-to-log.yaml", "./pipelines/generator-to-log.yaml")
 		},
 	}
 }
