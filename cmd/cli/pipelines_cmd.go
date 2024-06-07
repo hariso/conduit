@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/conduitio/conduit/pkg/conduit"
 	"github.com/spf13/cobra"
@@ -18,7 +19,7 @@ func isNotDSStore(path string, d fs.DirEntry) bool {
 func openFile(filename string) {
 	editor := os.Getenv("EDITOR")
 	if editor == "" {
-		editor = "nano"
+		editor = "code"
 	}
 	editorCmd := exec.Command(editor, filename)
 	if err := editorCmd.Run(); err != nil {
@@ -26,7 +27,7 @@ func openFile(filename string) {
 	}
 }
 
-func listDirectory(dir string) error {
+func listDirectoryWithoutExtension(dir string) error {
 	files, err := os.ReadDir(dir)
 	if err != nil {
 		return err
@@ -41,7 +42,9 @@ func listDirectory(dir string) error {
 	}
 
 	for _, file := range entries {
-		fmt.Println(file.Name())
+		name := filepath.Base(file.Name())
+		filenameWithoutExt := strings.TrimSuffix(name, filepath.Ext(name))
+		fmt.Println(filenameWithoutExt)
 	}
 
 	return nil
@@ -78,7 +81,7 @@ func cmdPipelines() *cobra.Command {
 			//// TODO: Check if I'm running the service correctly
 			//
 			pipelinePath, _ := cmd.Flags().GetString("path")
-			listDirectory(pipelinePath)
+			listDirectoryWithoutExtension(pipelinePath)
 			//
 			//logger := conduit.NewLogger(cfg.Log.Level, cfg.Log.Format)
 			//db := &inmemory.DB{}
